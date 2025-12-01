@@ -41,33 +41,38 @@ df_trk_just_before_landed = df_last_data_of_each_callsign[df_last_data_of_each_c
 df_temp_dep_flight = pd.DataFrame()
 df_temp_arr_flight = pd.DataFrame()
 
+df_trk_just_deperted['DEP_Airport'] = np.nan
+df_trk_just_before_landed['ARR_Airport'] = np.nan
+
 for target_airport in target_airports:
     # 使用するデータはap_frameの緯度経度。
     # TARGET_AIRPORTの緯度経度を取得
     target_airport_df = df_airport[df_airport['ICAO'] == target_airport]
     target_airport_lat = target_airport_df['Latitude_decimal'].values[0]
     target_airport_lon = target_airport_df['Longitude_decimal'].values[0]
-
-    df_trk_just_deperted.loc[:, 'Distance_to_Airport_temp'] = \
-        np.sqrt((df_trk_just_deperted['Latitude']       - target_airport_lat)**2
-              + (df_trk_just_deperted['Longitude']      - target_airport_lon)**2) * 111.32
-    df_trk_just_before_landed.loc[:, 'Distance_to_Airport_temp'] = \
-        np.sqrt((df_trk_just_before_landed['Latitude']  - target_airport_lat)**2
-              + (df_trk_just_before_landed['Longitude'] - target_airport_lon)**2) * 111.32
     
-    # Distance_to_Airportが10km以下のものを抽出
+    # 出発空港、到着空港が未設定のものに対して、TARGET_AIRPORTまでの距離を計算
+    df_trk_just_deperted.loc[df_trk_just_deperted['DEP_Airport'].isna(), 'Distance_to_Airport_temp'] = \
+        np.sqrt((df_trk_just_deperted['Latitude']       - target_airport_lat)**2
+                + (df_trk_just_deperted['Longitude']      - target_airport_lon)**2) * 111.32
+    df_trk_just_before_landed.loc[df_trk_just_before_landed['ARR_Airport'].isna(), 'Distance_to_Airport_temp'] = \
+        np.sqrt((df_trk_just_before_landed['Latitude']  - target_airport_lat)**2
+                + (df_trk_just_before_landed['Longitude'] - target_airport_lon)**2) * 111.32
+
+    # Distance_to_Airportが10km以下のものを抽出(出発空港、到着空港未設定のものに対して)
     df_trk_just_deperted.loc[
-        df_trk_just_deperted['Distance_to_Airport_temp'] <= 10.0,
-         ['DEP_Airport']] = target_airport
+        df_trk_just_deperted['DEP_Airport'].isna() & (df_trk_just_deperted['Distance_to_Airport_temp'] <= 10.0),
+        'DEP_Airport'] = target_airport
+
     df_trk_just_deperted.loc[
-        df_trk_just_deperted['Distance_to_Airport_temp'] <= 10.0,
+        df_trk_just_deperted['DEP_Airport'].isna() & (df_trk_just_deperted['Distance_to_Airport_temp'] <= 10.0),
          ['Distance_to_Airport']] = df_trk_just_deperted['Distance_to_Airport_temp']
 
     df_trk_just_before_landed.loc[
-        df_trk_just_before_landed['Distance_to_Airport_temp'] <= 10.0,
+        df_trk_just_before_landed['ARR_Airport'].isna() & (df_trk_just_before_landed['Distance_to_Airport_temp'] <= 10.0),
          ['ARR_Airport']] = target_airport
     df_trk_just_before_landed.loc[
-        df_trk_just_before_landed['Distance_to_Airport_temp'] <= 10.0,
+        df_trk_just_before_landed['ARR_Airport'].isna() & (df_trk_just_before_landed['Distance_to_Airport_temp'] <= 10.0),
          ['Distance_to_Airport']] = df_trk_just_before_landed['Distance_to_Airport_temp']
 
     # 不要な列を削除
