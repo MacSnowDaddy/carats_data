@@ -12,7 +12,18 @@ df_trk_just_deperted = pd.DataFrame()
 df_trk_just_before_landed = pd.DataFrame()
 
 # 抽出する空港の順番を設定。数の多いものから順に設定することで効率化を図る。
-target_airports = ['RJTT', 'RJFF', 'RJBB', 'RJAA', 'ROAH', 'RJCC', 'RJGG', 'RJOO', 'RJSS', 'RJFK']
+target_airports = ['RJTT', 'RJFF', 'RJBB', 'RJAA', 'ROAH', 'RJCC', 'RJGG', 'RJOO', 'RJSS', 'RJFK',
+'RJFT', 'RJFU', 'RJOA', 'RJFM', 'RJOM', 'RJOT', 'RJFO', 'ROIG', 'RJFR', 'RJCH', 'ROMY',
+'RJNK', 'RJAF', 'RJAH', 'RJAK', 'RJAM', 'RJAN', 'RJAW', 'RJAZ', 'RJBD', 'RJBE', 'RJBK',
+'RJBT', 'RJCB', 'RJCK', 'RJCM', 'RJCN', 'RJCO', 'RJCR', 'RJCT', 'RJCW', 'RJDA', 'RJDB',
+'RJDC', 'RJDK', 'RJDM', 'RJDO', 'RJDT', 'RJEB', 'RJEC', 'RJEO', 'RJER', 'RJFA', 'RJFC',
+'RJFE', 'RJFG', 'RJFN', 'RJFS', 'RJFY', 'RJFZ', 'RJKA', 'RJKB', 'RJKI', 'RJKN', 'RJNA',
+'RJNF', 'RJNG', 'RJNH', 'RJNO', 'RJNS', 'RJNT', 'RJNW', 'RJNY', 'RJOB', 'RJOC', 'RJOE',
+'RJOF', 'RJOH', 'RJOI', 'RJOK', 'RJOR', 'RJOS', 'RJOW', 'RJOY', 'RJOZ', 'RJSA', 'RJSC',
+'RJSF', 'RJSH', 'RJSI', 'RJSK', 'RJSM', 'RJSN', 'RJSO', 'RJSR', 'RJST', 'RJSU', 'RJSY',
+'RJTA', 'RJTC', 'RJTE', 'RJTF', 'RJTH', 'RJTJ', 'RJTK', 'RJTL', 'RJTO', 'RJTQ', 'RJTU',
+'RJTY', 'RODN', 'ROKJ', 'ROKR', 'ROMD', 'RORA', 'RORE', 'RORH', 'RORK', 'RORS', 'RORT',
+'RORY', 'ROTM', 'ROYN',]
 
 for date in dates:
     for source_time in source_times:
