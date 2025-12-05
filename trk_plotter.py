@@ -2,7 +2,6 @@
 Docstring for trk_plotter
 '''
 import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import datetime
 
 class TrkPlotter:
