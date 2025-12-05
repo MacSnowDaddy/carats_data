@@ -105,6 +105,12 @@ class AirportGuesser:
             on='Callsign', how='outer', suffixes=('_DEP','_ARR'))
 
     def get_guess_df(self) -> pd.DataFrame:
+        """推定結果のDataFrameを取得します。
+        Returns:
+            pd.DataFrame: 推定結果のDataFrame. 
+            カラムは 'Callsign', 'DEP_Airport', 'Distance_to_Airport_DEP', 
+            'ARR_Airport', 'Distance_to_Airport_ARR' です.
+        """
         return self.df_guess
 
     def to_csv(self, path: str):
