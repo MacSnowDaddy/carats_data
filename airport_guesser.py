@@ -16,7 +16,14 @@ class AirportGuesser:
       df = g.get_guess_df()
       g.to_csv('airport_guess.csv')
     """
-    def __init__(self, airport_file: str, target_airports: Optional[List[str]] = None):
+        '''
+        Docstring for __init__
+        
+        :param airport_file: file of aerodromes. tsv format. columns should include 'ICAO', 'Japanese-ad-name, 'Latitude(ddmmss)', 'Longitude(ddmmss)'.
+        :type airport_file: str This file's format should be... [name, any, lat[ddmmss], lon[ddmmss], [...]]
+        :param target_airports: List of ICAO codes to be target airports. If None, all airports in airport_file are used.
+        :type target_airports: Optional[List[str]]
+        '''
         self.airport_file = airport_file
         self.target_airports = target_airports
         self.df_all_trk = pd.DataFrame()
