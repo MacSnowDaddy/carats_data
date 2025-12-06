@@ -16,24 +16,31 @@ class AirportGuesser:
       df = g.get_guess_df()
       g.to_csv('airport_guess.csv')
     """
+    def __init__(self, airport_file: str, fixes_file: str=None, target_airports: Optional[List[str]] = None):
         '''
         Docstring for __init__
         
         :param airport_file: file of aerodromes. tsv format. columns should include 'ICAO', 'Japanese-ad-name, 'Latitude(ddmmss)', 'Longitude(ddmmss)'.
+        :param fixes_file: file of bdyFixs. Optional. tsv format. columns should include 'Name',dummy-column, 'Latitude(ddmmss)', 'Longitude(ddmmss)'.
         :type airport_file: str This file's format should be... [name, any, lat[ddmmss], lon[ddmmss], [...]]
         :param target_airports: List of ICAO codes to be target airports. If None, all airports in airport_file are used.
         :type target_airports: Optional[List[str]]
         '''
         self.airport_file = airport_file
+        if fixes_file is not None:
+            self.is_to_guess_fixes = True
+        else:
+            self.is_to_guess_fixes = False
+        self.fixes_file = fixes_file
         self.target_airports = target_airports
         self.df_all_trk = pd.DataFrame()
         self.df_airport = pd.DataFrame()
         self.df_trk_departed = pd.DataFrame()
         self.df_trk_landed = pd.DataFrame()
         self.df_guess = pd.DataFrame()
-        self._load_airports()
+        self._load_airports_and_fixes()
 
-    def _load_airports(self):
+    def _load_airports_and_fixes(self):
         ap = pd.read_csv(self.airport_file, header=None, usecols=[0,2,3],
                          delim_whitespace=True, names=["ICAO","Latitude","Longitude"])
         ap["Latitude_decimal"] = ap["Latitude"].apply(
@@ -41,8 +48,19 @@ class AirportGuesser:
         ap["Longitude_decimal"] = ap["Longitude"].apply(
             lambda x: round((int(x[:3]) + int(x[3:5])/60 + int(x[5:7])/3600),5))
         self.df_airport = ap
+
+        if self.is_to_guess_fixes is True:
+            fix = pd.read_csv(self.fixes_file, header=None, usecols=[0,2,3],
+                            delim_whitespace=True, names=["Name","dummy","Latitude","Longitude"])
+            fix["Latitude_decimal"] = fix["Latitude"].apply(
+                lambda x: round((int(x[:2]) + int(x[2:4])/60 + int(x[4:6])/3600),5))
+            fix["Longitude_decimal"] = fix["Longitude"].apply(
+                lambda x: round((int(x[:3]) + int(x[3:5])/60 + int(x[5:7])/3600),5))
+            self.df_fixes = fix
         if self.target_airports is None:
             self.target_airports = ap['ICAO'].tolist()
+        if self.is_to_guess_fixes is True:
+            self.target_airports += self.df_fixes['Name'].tolist()
 
     def load_trks_from_paths(self, paths: List[str]):
         frames = []
@@ -66,13 +84,29 @@ class AirportGuesser:
         self.df_all_trk = self.df_all_trk.sort_values(by=['Callsign','time'], ascending=[True, True])
         first = self.df_all_trk.groupby('Callsign', as_index=False).first()
         last = self.df_all_trk.groupby('Callsign', as_index=False).last()
+        # guess airports for departed and landed
         self.df_trk_departed = first[first['Altitude'] <= 6000].copy()
         self.df_trk_landed = last[last['Altitude'] <= 6000].copy()
+        # df_trk_departed, df_trk_landedには含まれない、df_all_trkを保持するためのdfを作成する。
+        # fixの抽出のために使用する。
+        if self.is_to_guess_fixes is True:
+            self.df_trk_in_the_air_at_first = first[~first['Callsign'].isin(
+                pd.concat([self.df_trk_departed['Callsign'], self.df_trk_landed['Callsign']], ignore_index=True)
+            )].copy()
+            self.df_trk_in_the_air_at_last = last[~last['Callsign'].isin(
+                pd.concat([self.df_trk_departed['Callsign'], self.df_trk_landed['Callsign']], ignore_index=True)
+            )].copy()
+
         # 初期化カラム
-        self.df_trk_departed['DEP_Airport'] = np.nan
-        self.df_trk_departed['Distance_to_Airport'] = np.nan
-        self.df_trk_landed['ARR_Airport'] = np.nan
-        self.df_trk_landed['Distance_to_Airport'] = np.nan
+        self.df_trk_departed['EntryPoint'] = np.nan
+        self.df_trk_departed['Distance_to_EntryPoint'] = np.nan
+        self.df_trk_landed['ExitPoint'] = np.nan
+        self.df_trk_landed['Distance_to_ExitPoint'] = np.nan
+        if self.is_to_guess_fixes is True:
+            self.df_trk_in_the_air_at_first['EntryPoint'] = np.nan
+            self.df_trk_in_the_air_at_first['Distance_to_EntryPoint'] = np.nan
+            self.df_trk_in_the_air_at_last['ExitPoint'] = np.nan
+            self.df_trk_in_the_air_at_last['Distance_to_ExitPoint'] = np.nan
 
     def assign(self, radius_km: float = 10.0):
         """target_airports の順に距離を計算して radius_km 以下なら割り当てる（最初に合致した空港を採用）"""
@@ -86,44 +120,89 @@ class AirportGuesser:
             lon = row['Longitude_decimal'].values[0]
 
             # 出発
-            mask_dep = self.df_trk_departed['DEP_Airport'].isna()
+            mask_dep = self.df_trk_departed['EntryPoint'].isna()
             if mask_dep.any():
                 d_dep = np.sqrt((self.df_trk_departed.loc[mask_dep,'Latitude'] - lat)**2 +
                                 (self.df_trk_departed.loc[mask_dep,'Longitude'] - lon)**2) * 111.32
                 assign_mask = d_dep <= radius_km
                 idxs = self.df_trk_departed.loc[mask_dep].index[assign_mask]
-                self.df_trk_departed.loc[idxs, 'DEP_Airport'] = icao
-                self.df_trk_departed.loc[idxs, 'Distance_to_Airport'] = d_dep[assign_mask]
+                self.df_trk_departed.loc[idxs, 'EntryPoint'] = icao
+                self.df_trk_departed.loc[idxs, 'Distance_to_EntryPoint'] = d_dep[assign_mask]
 
             # 到着
-            mask_arr = self.df_trk_landed['ARR_Airport'].isna()
+            mask_arr = self.df_trk_landed['ExitPoint'].isna()
             if mask_arr.any():
                 d_arr = np.sqrt((self.df_trk_landed.loc[mask_arr,'Latitude'] - lat)**2 +
                                 (self.df_trk_landed.loc[mask_arr,'Longitude'] - lon)**2) * 111.32
                 assign_mask = d_arr <= radius_km
                 idxs = self.df_trk_landed.loc[mask_arr].index[assign_mask]
-                self.df_trk_landed.loc[idxs, 'ARR_Airport'] = icao
-                self.df_trk_landed.loc[idxs, 'Distance_to_Airport'] = d_arr[assign_mask]
+                self.df_trk_landed.loc[idxs, 'ExitPoint'] = icao
+                self.df_trk_landed.loc[idxs, 'Distance_to_ExitPoint'] = d_arr[assign_mask]
+
+        if self.is_to_guess_fixes is True:
+            for _, fix_row in self.df_fixes.iterrows():
+                name = fix_row['Name']
+                lat = fix_row['Latitude_decimal']
+                lon = fix_row['Longitude_decimal']
+
+                # 最初に飛行中だったもの
+                mask_first = self.df_trk_in_the_air_at_first['EntryPoint'].isna()
+                if mask_first.any():
+                    d_first = np.sqrt((self.df_trk_in_the_air_at_first.loc[mask_first,'Latitude'] - lat)**2 +
+                                    (self.df_trk_in_the_air_at_first.loc[mask_first,'Longitude'] - lon)**2) * 111.32
+                    assign_mask = d_first <= radius_km
+                    idxs = self.df_trk_in_the_air_at_first.loc[mask_first].index[assign_mask]
+                    self.df_trk_in_the_air_at_first.loc[idxs, 'EntryPoint'] = name
+                    self.df_trk_in_the_air_at_first.loc[idxs, 'Distance_to_EntryPoint'] = d_first[assign_mask]
+
+                # 最後に飛行中だったもの
+                mask_last = self.df_trk_in_the_air_at_last['ExitPoint'].isna()
+                if mask_last.any():
+                    d_last = np.sqrt((self.df_trk_in_the_air_at_last.loc[mask_last,'Latitude'] - lat)**2 +
+                                    (self.df_trk_in_the_air_at_last.loc[mask_last,'Longitude'] - lon)**2) * 111.32
+                    assign_mask = d_last <= radius_km
+                    idxs = self.df_trk_in_the_air_at_last.loc[mask_last].index[assign_mask]
+                    self.df_trk_in_the_air_at_last.loc[idxs, 'ExitPoint'] = name
+                    self.df_trk_in_the_air_at_last.loc[idxs, 'Distance_to_ExitPoint'] = d_last[assign_mask]
+            #EntryPoint,ExitPointがfixで推定されたものを、df_trk_departed, df_trk_landedに追加する
+            self.df_trk_departed = pd.concat(
+                [self.df_trk_departed, self.df_trk_in_the_air_at_first], ignore_index=True)
+            self.df_trk_landed = pd.concat(
+                [self.df_trk_landed, self.df_trk_in_the_air_at_last], ignore_index=True)
 
         # マージして結果を作る
         self.df_guess = pd.merge(
-            self.df_trk_departed[['Callsign','DEP_Airport','Distance_to_Airport']],
-            self.df_trk_landed[['Callsign','ARR_Airport','Distance_to_Airport']],
-            on='Callsign', how='outer', suffixes=('_DEP','_ARR'))
+            self.df_trk_departed[['Callsign','EntryPoint','Distance_to_EntryPoint']],
+            self.df_trk_landed[['Callsign','ExitPoint','Distance_to_ExitPoint']],
+            on='Callsign', how='outer')
 
     def get_guess_df(self) -> pd.DataFrame:
         """推定結果のDataFrameを取得します。
         Returns:
             pd.DataFrame: 推定結果のDataFrame. 
-            カラムは 'Callsign', 'DEP_Airport', 'Distance_to_Airport_DEP', 
-            'ARR_Airport', 'Distance_to_Airport_ARR' です.
+            カラムは 'Callsign', 'EntryPoint', 'Distance_to_EntryPoint', 
+            'ExitPoint', 'Distance_to_ExitPoint' です.
         """
         return self.df_guess
 
-    def to_csv(self, path: str):
+    def to_csv(self, path: str, include_trks=False):
+        '''To write csv file of this output.
+        
+        param:
+        include_trks: If this args is True, write all trks 
+        appended thire EntryPoint and ExitPoint. Default:False'''
         if self.df_guess.empty:
             return
-        self.df_guess.to_csv(path, index=False)
+        if include_trks is True:
+            self.df_all_trk = pd.merge(
+                self.df_all_trk,
+                self.df_guess[['Callsign', 'EntryPoint', 'ExitPoint']],
+                how='left',
+                on='Callsign'
+                )
+            self.df_all_trk.to_csv(path, index=False)
+        else:
+            self.df_guess.to_csv(path, index=False)
 
 # -------------------------
 # 簡単な使用例（スクリプトとして使う場合）
