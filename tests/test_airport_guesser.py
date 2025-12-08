@@ -95,6 +95,7 @@ class TestLoadTrksFromPaths:
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
         guesser.load_trks_from_paths([TEST_TRK_FILE_1])
         assert not guesser.df_all_trk.empty
+        assert 'date' in guesser.df_all_trk.columns
         assert 'Callsign' in guesser.df_all_trk.columns
         assert 'Latitude' in guesser.df_all_trk.columns
         assert 'Longitude' in guesser.df_all_trk.columns
@@ -118,7 +119,7 @@ class TestLoadTrksFromPaths:
         """カラム名が正しく設定されることをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
         guesser.load_trks_from_paths([TEST_TRK_FILE_1])
-        expected_columns = ["time", "Callsign", "Latitude", "Longitude", "Altitude", "Type"]
+        expected_columns = ["date", "time", "Callsign", "Latitude", "Longitude", "Altitude", "Type"]
         assert list(guesser.df_all_trk.columns) == expected_columns
 
 
@@ -264,13 +265,21 @@ class TestGetGuessDF:
         guesser.preprocess()
         guesser.assign(radius_km=10.0)
         
-        result = guesser.get_guess_df()
+        result = guesser.get_guess_df(include_date=True)
         expected_columns = [
-            'Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
+            'date', 'Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
             'ExitPoint', 'Distance_to_ExitPoint'
         ]
         for col in expected_columns:
             assert col in result.columns
+
+        result_no_date = guesser.get_guess_df(include_date=False)
+        expected_columns_no_date = [
+            'Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
+            'ExitPoint', 'Distance_to_ExitPoint'
+        ]
+        for col in expected_columns_no_date:
+            assert col in result_no_date.columns
             
     def test_get_guess_df_before_assignment(self):
         """割り当て前にget_guess_dfを呼んだ場合のテスト"""
@@ -319,6 +328,32 @@ class TestToCsv:
             
             # トラッキングデータ全体が含まれることを確認
             df = pd.read_csv(output_path)
+            assert 'EntryPoint' in df.columns
+            assert 'ExitPoint' in df.columns
+            assert not 'date' in df.columns  # dateカラムは含まれない
+            # 元のトラッキングデータのカラムも含まれる
+            assert 'time' in df.columns
+            assert 'Altitude' in df.columns
+        finally:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+
+    def test_to_csv_with_include_date(self):
+        """include_date=Trueでto_csvを実行するテスト"""
+        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
+        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.preprocess()
+        guesser.assign(radius_km=10.0)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
+            output_path = f.name
+        
+        try:
+            guesser.to_csv(output_path, include_trks=True, include_date=True)
+            assert os.path.exists(output_path)
+            
+            # トラッキングデータ全体が含まれることを確認
+            df = pd.read_csv(output_path)
+            assert 'date' in df.columns
             assert 'EntryPoint' in df.columns
             assert 'ExitPoint' in df.columns
             # 元のトラッキングデータのカラムも含まれる

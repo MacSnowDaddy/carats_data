@@ -175,17 +175,20 @@ class AirportGuesser:
 
         # マージして結果を作る
         self.df_guess = pd.merge(
-            self.df_trk_departed[['Callsign','EntryPoint','Distance_to_EntryPoint']],
-            self.df_trk_landed[['Callsign','ExitPoint','Distance_to_ExitPoint']],
-            on='Callsign', how='outer')
+            self.df_trk_departed[['date', 'Callsign','EntryPoint','Distance_to_EntryPoint']],
+            self.df_trk_landed[['date', 'Callsign','ExitPoint','Distance_to_ExitPoint']],
+            on=['date', 'Callsign'], how='outer')
 
     def get_guess_df(self, include_date=False) -> pd.DataFrame:
         """推定結果のDataFrameを取得します。
         Returns:
-            pd.DataFrame: 推定結果のDataFrame. 
-            カラムは 'Callsign', 'EntryPoint', 'Distance_to_EntryPoint', 
+            pd.DataFrame: 推定結果のDataFrame.空の時は空のDataFrameを返します. 
+            カラムは 'date'(指定時), 'Callsign', 'EntryPoint', 'Distance_to_EntryPoint', 
             'ExitPoint', 'Distance_to_ExitPoint' です.
         """
+        if self.df_guess.empty:
+            return self.df_guess
+
         if include_date is False:
             return self.df_guess[['Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
                                   'ExitPoint', 'Distance_to_ExitPoint']]
