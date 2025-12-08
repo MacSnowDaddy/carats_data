@@ -65,8 +65,11 @@ class AirportGuesser:
     def load_trks_from_paths(self, paths: List[str]):
         frames = []
         for p in paths:
+            date = p.split('trk')[1].split('_')[0]
             df = pd.read_csv(p)
             df.columns = ["time","Callsign","Latitude","Longitude","Altitude","Type"]
+            df.insert(0, 'date', None)
+            df.loc[:, 'date'] = date
             frames.append(df)
         if frames:
             self.df_all_trk = pd.concat([self.df_all_trk] + frames, ignore_index=True)
@@ -176,16 +179,20 @@ class AirportGuesser:
             self.df_trk_landed[['Callsign','ExitPoint','Distance_to_ExitPoint']],
             on='Callsign', how='outer')
 
-    def get_guess_df(self) -> pd.DataFrame:
+    def get_guess_df(self, include_date=False) -> pd.DataFrame:
         """推定結果のDataFrameを取得します。
         Returns:
             pd.DataFrame: 推定結果のDataFrame. 
             カラムは 'Callsign', 'EntryPoint', 'Distance_to_EntryPoint', 
             'ExitPoint', 'Distance_to_ExitPoint' です.
         """
-        return self.df_guess
+        if include_date is False:
+            return self.df_guess[['Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
+                                  'ExitPoint', 'Distance_to_ExitPoint']]
+        else:
+            return self.df_guess
 
-    def to_csv(self, path: str, include_trks=False):
+    def to_csv(self, path: str, include_trks=False, include_date=False):
         '''To write csv file of this output.
         
         param:
@@ -200,8 +207,16 @@ class AirportGuesser:
                 how='left',
                 on='Callsign'
                 )
-            self.df_all_trk.to_csv(path, index=False)
+            if include_date is False:
+                self.df_all_trk.drop(columns=['date']).to_csv(path, index=False)
+            else:
+                self.df_all_trk.to_csv(path, index=False)
         else:
+            if include_date is False:
+                self.df_guess[['Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
+                               'ExitPoint', 'Distance_to_ExitPoint']].to_csv(path, index=False)
+            else:
+                self.df_guess.to_csv(path, index=False)
             self.df_guess.to_csv(path, index=False)
 
 # -------------------------

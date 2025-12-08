@@ -67,7 +67,7 @@ def main(argv=None):
 
     g.preprocess()
     g.assign(radius_km=args.radius)
-    g.to_csv(args.output, include_trks=args.include_trks)
+    g.to_csv(args.output, include_trks=args.include_trks, include_date=True)
     if args.verbose:
         print(f"Wrote {args.output}")
 
