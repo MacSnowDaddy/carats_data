@@ -31,6 +31,9 @@ class CaratsTrackReader:
             time_td = pd.to_timedelta(df['time'])
             df['datetime'] = date_dt.dt.normalize() + time_td
             df = df.drop(columns=['date', 'time'])
+            # Callsignにdateを付与してユニーク化
+            df['Callsign'] = df['Callsign'].astype(str) + '_' + date
+            df['Callsign'] = df['Callsign'].astype('category')
             df = df.reindex(columns=['datetime', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Type'])
             frames.append(df)
         if frames:

@@ -201,7 +201,7 @@ class TestAssign:
         guesser.assign(radius_km=10.0)
         
         # AG01002は東京近郊から出発
-        guess = guesser.df_guess[guesser.df_guess['Callsign'] == 'AG01002']
+        guess = guesser.df_guess[guesser.df_guess['Callsign'] == 'AG01002_20190812']
         assert not guess.empty
         
     def test_assign_creates_guess_dataframe(self):
