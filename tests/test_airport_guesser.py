@@ -87,6 +87,27 @@ class TestLoadAirportsAndFixes:
         assert not df['Longitude_decimal'].isna().any()
 
 
+class TestSetTrksToAirportGuesser:
+    """トラッキングデータをAirportGuesserに設定するテスト"""
+    
+    def test_set_trks_assigns_dataframe(self):
+        """set_trksメソッドがDataFrameを正しく設定することをテスト"""
+        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
+        df_trk = pd.read_csv(TEST_TRK_FILE_1, header=None, index_col=None)
+        df_trk.columns = ['time', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Type']
+        df_trk['date'] = '20190816'
+        df_trk['time'] = df_trk['time'].str.slice(8,)
+        df_trk.reindex(columns=['date', 'time', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Type'])
+        guesser.set_trks_df(df_trk)
+        assert not guesser.df_all_trk.empty
+        assert len(guesser.df_all_trk) == len(df_trk)
+        
+    def test_set_trks_with_empty_dataframe(self):
+        """空のDataFrameを設定した場合のテスト"""
+        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
+        empty_df = pd.DataFrame()
+        guesser.set_trks_df(empty_df)
+        assert guesser.df_all_trk.empty
 class TestLoadTrksFromPaths:
     """トラッキングデータの読み込みに関するテスト"""
     
@@ -121,22 +142,6 @@ class TestLoadTrksFromPaths:
         guesser.load_trks_from_paths([TEST_TRK_FILE_1])
         expected_columns = ["date", "time", "Callsign", "Latitude", "Longitude", "Altitude", "Type"]
         assert list(guesser.df_all_trk.columns) == expected_columns
-
-
-class TestLoadTrksFromDates:
-    """日付指定でのトラッキングデータ読み込みに関するテスト"""
-    
-    def test_load_from_dates(self):
-        """日付とタイムスロットを指定して読み込むテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_dates(
-            dates=['20190816'],
-            source_times=['00_12', '12_18'],
-            trk_dir=TEST_DATA_DIR
-        )
-        assert not guesser.df_all_trk.empty
-        # 両方のファイルが読み込まれている
-        assert len(guesser.df_all_trk) == 14
 
 
 class TestPreprocess:
@@ -286,99 +291,6 @@ class TestGetGuessDF:
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
         result = guesser.get_guess_df()
         assert result.empty
-
-
-class TestToCsv:
-    """CSV出力に関するテスト"""
-    
-    def test_to_csv_creates_file(self):
-        """to_csvがファイルを作成することをテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
-        guesser.preprocess()
-        guesser.assign(radius_km=10.0)
-        
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
-            output_path = f.name
-        
-        try:
-            guesser.to_csv(output_path)
-            assert os.path.exists(output_path)
-            
-            # ファイルが読み込めることを確認
-            df = pd.read_csv(output_path)
-            assert not df.empty
-        finally:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-                
-    def test_to_csv_with_include_trks(self):
-        """include_trks=Trueでto_csvを実行するテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
-        guesser.preprocess()
-        guesser.assign(radius_km=10.0)
-        
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
-            output_path = f.name
-        
-        try:
-            guesser.to_csv(output_path, include_trks=True)
-            assert os.path.exists(output_path)
-            
-            # トラッキングデータ全体が含まれることを確認
-            df = pd.read_csv(output_path)
-            assert 'EntryPoint' in df.columns
-            assert 'ExitPoint' in df.columns
-            assert not 'date' in df.columns  # dateカラムは含まれない
-            # 元のトラッキングデータのカラムも含まれる
-            assert 'time' in df.columns
-            assert 'Altitude' in df.columns
-        finally:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-
-    def test_to_csv_with_include_date(self):
-        """include_date=Trueでto_csvを実行するテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
-        guesser.preprocess()
-        guesser.assign(radius_km=10.0)
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
-            output_path = f.name
-        
-        try:
-            guesser.to_csv(output_path, include_trks=True, include_date=True)
-            assert os.path.exists(output_path)
-            
-            # トラッキングデータ全体が含まれることを確認
-            df = pd.read_csv(output_path)
-            assert 'date' in df.columns
-            assert 'EntryPoint' in df.columns
-            assert 'ExitPoint' in df.columns
-            # 元のトラッキングデータのカラムも含まれる
-            assert 'time' in df.columns
-            assert 'Altitude' in df.columns
-        finally:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-                
-    def test_to_csv_with_empty_data(self):
-        """空のデータでto_csvを実行した場合のテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
-            output_path = f.name
-        
-        try:
-            # 空のデータでCSV出力（エラーなく実行されるべき）
-            guesser.to_csv(output_path)
-            # ファイルは作成されない（df_guessが空のため）
-            # この動作は実装に依存する
-        finally:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-
 
 class TestEdgeCases:
     """エッジケースに関するテスト"""

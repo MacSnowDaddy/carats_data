@@ -1,6 +1,7 @@
 """airport_guesser module — AirportGuesser クラスを提供します."""
 from __future__ import annotations
 
+import warnings
 import pandas as pd
 import numpy as np
 from typing import List, Optional
@@ -62,7 +63,17 @@ class AirportGuesser:
         if self.is_to_guess_fixes is True:
             self.target_airports += self.df_fixes['Name'].tolist()
 
+    def set_trks_df(self, df_trks: pd.DataFrame):
+        """
+        AirportGuesserにトラッキングデータのDataFrameを設定します。
+        
+        :param df_trks: 使用するトラッキングデータのDataFrame。カラムは['date','time','Callsign','Latitude','Longitude','Altitude','Type']を含む必要があります。
+        """
+        self.df_all_trk = df_trks.copy()
+
     def load_trks_from_paths(self, paths: List[str]):
+        warn_msg = "`deprecated_method` is deprecated and will be removed"
+        warnings.warn(warn_msg, UserWarning)
         frames = []
         for p in paths:
             date = p.split('trk')[1].split('_')[0]
@@ -75,6 +86,8 @@ class AirportGuesser:
             self.df_all_trk = pd.concat([self.df_all_trk] + frames, ignore_index=True)
 
     def load_trks_from_dates(self, dates: List[str], source_times: List[str], trk_dir: str):
+        warn_msg = "`deprecated_method` is deprecated and will be removed"
+        warnings.warn(warn_msg, UserWarning)
         paths = []
         for d in dates:
             for st in source_times:
@@ -201,6 +214,8 @@ class AirportGuesser:
         param:
         include_trks: If this args is True, write all trks 
         appended thire EntryPoint and ExitPoint. Default:False'''
+        warn_msg = "`deprecated_method` is deprecated and will be removed in v0.5"
+        warnings.warn(warn_msg, UserWarning)
         if self.df_guess.empty:
             return
         if include_trks is True:
