@@ -9,14 +9,12 @@ class TrkPlotter:
         """Initialize TrkPlotter with tracking data.
 
         This class provides methods to plot flight paths from tracking data.
-        tracking data should include columns:['time', 'Latitude', 'Longitude']
+        tracking data should include columns:['datetime', 'Latitude', 'Longitude']
         Args:
             df_trk (pd.DataFrame): DataFrame containing tracking data includes columns
-                                   'time', 'Latitude', 'Longitude'.
+                                   'datetime', 'Latitude', 'Longitude'.
         """
         self.df_trk = df_trk.copy()
-        self.df_trk['time'] = pd.to_datetime(self.df_trk['time'])
-    
 
     def plot_geojson_flight_points(self, key_column=None, key=None, title=None):
         """Plot geojson file of the flight trk as points.

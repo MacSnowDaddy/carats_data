@@ -27,6 +27,11 @@ class CaratsTrackReader:
             )
             df.insert(0, 'date', None)
             df.loc[:, 'date'] = date
+            date_dt = pd.to_datetime(df['date'])
+            time_td = pd.to_timedelta(df['time'])
+            df['datetime'] = date_dt.dt.normalize() + time_td
+            df = df.drop(columns=['date', 'time'])
+            df = df.reindex(columns=['datetime', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Type'])
             frames.append(df)
         if frames:
             self.df_all_trk = pd.concat(

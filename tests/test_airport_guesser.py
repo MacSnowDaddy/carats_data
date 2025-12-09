@@ -4,15 +4,19 @@ import pandas as pd
 import numpy as np
 import os
 import tempfile
+import carats_trk_reader
 from airport_guesser import AirportGuesser
 
 
 # テストデータのパス
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), 'test_data')
 TEST_AIRPORT_FILE = os.path.join(TEST_DATA_DIR, 'test_airports.txt')
-TEST_TRK_FILE_1 = os.path.join(TEST_DATA_DIR, 'trk20190816_00_12.csv')
-TEST_TRK_FILE_2 = os.path.join(TEST_DATA_DIR, 'trk20190816_12_18.csv')
+TEST_TRK_FILE_1 = os.path.join(TEST_DATA_DIR, 'trk20190812_00_12.csv')
+TEST_TRK_FILE_2 = os.path.join(TEST_DATA_DIR, 'trk20190812_00_12.csv')
+TEST_TRK_FILE_3 = os.path.join(TEST_DATA_DIR, 'trk20190812_12_18.csv')
 
+carats_trk_reader_instance = carats_trk_reader.CaratsTrackReader()
+df_test_trks = carats_trk_reader_instance.read_trk_files([TEST_TRK_FILE_1, TEST_TRK_FILE_2, TEST_TRK_FILE_3])
 
 class TestAirportGuesserInit:
     """AirportGuesserクラスの初期化に関するテスト"""
@@ -87,60 +91,32 @@ class TestLoadAirportsAndFixes:
         assert not df['Longitude_decimal'].isna().any()
 
 
-class TestSetTrksToAirportGuesser:
-    """トラッキングデータをAirportGuesserに設定するテスト"""
-    
-    def test_set_trks_assigns_dataframe(self):
-        """set_trksメソッドがDataFrameを正しく設定することをテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        df_trk = pd.read_csv(TEST_TRK_FILE_1, header=None, index_col=None)
-        df_trk.columns = ['time', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Type']
-        df_trk['date'] = '20190816'
-        df_trk['time'] = df_trk['time'].str.slice(8,)
-        df_trk.reindex(columns=['date', 'time', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Type'])
-        guesser.set_trks_df(df_trk)
-        assert not guesser.df_all_trk.empty
-        assert len(guesser.df_all_trk) == len(df_trk)
-        
-    def test_set_trks_with_empty_dataframe(self):
-        """空のDataFrameを設定した場合のテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        empty_df = pd.DataFrame()
-        guesser.set_trks_df(empty_df)
-        assert guesser.df_all_trk.empty
 class TestLoadTrksFromPaths:
     """トラッキングデータの読み込みに関するテスト"""
     
-    def test_load_single_file(self):
-        """単一のトラッキングファイルを読み込むテスト"""
+    def test_import_trk_data(self):
+        """trkデータのインポートテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
-        assert not guesser.df_all_trk.empty
-        assert 'date' in guesser.df_all_trk.columns
+        guesser.set_trks_df(df_test_trks)
+        assert 'datetime' in guesser.df_all_trk.columns
         assert 'Callsign' in guesser.df_all_trk.columns
         assert 'Latitude' in guesser.df_all_trk.columns
         assert 'Longitude' in guesser.df_all_trk.columns
         assert 'Altitude' in guesser.df_all_trk.columns
-        
-    def test_load_multiple_files(self):
-        """複数のトラッキングファイルを読み込むテスト"""
-        guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1, TEST_TRK_FILE_2])
-        assert not guesser.df_all_trk.empty
-        # ファイル1には9行、ファイル2には5行のデータがある
-        assert len(guesser.df_all_trk) == 14
-        
+        assert 'Type' in guesser.df_all_trk.columns
+        assert len(guesser.df_all_trk) == len(df_test_trks)
+
     def test_load_empty_list(self):
         """空のリストを渡した場合のテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([])
+        guesser.set_trks_df(pd.DataFrame())
         assert guesser.df_all_trk.empty
         
     def test_columns_are_renamed(self):
         """カラム名が正しく設定されることをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
-        expected_columns = ["date", "time", "Callsign", "Latitude", "Longitude", "Altitude", "Type"]
+        guesser.set_trks_df(df_test_trks)
+        expected_columns = ["datetime", "Callsign", "Latitude", "Longitude", "Altitude", "Type"]
         assert list(guesser.df_all_trk.columns) == expected_columns
 
 
@@ -150,16 +126,16 @@ class TestPreprocess:
     def test_preprocess_sorts_data(self):
         """前処理でデータがソートされることをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
-        # CallsignとTimeでソートされている
+        # Callsignでソートされている
         callsigns = guesser.df_all_trk['Callsign'].tolist()
         assert callsigns == sorted(callsigns)
         
     def test_preprocess_separates_departed_landed(self):
         """前処理で出発・到着を分離することをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         
         # 最初の高度が6000ft以下のものが出発として抽出される
@@ -170,7 +146,7 @@ class TestPreprocess:
     def test_preprocess_filters_by_altitude(self):
         """前処理で高度によるフィルタリングが行われることをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         
         # 出発データは全て6000ft以下
@@ -181,7 +157,7 @@ class TestPreprocess:
     def test_preprocess_adds_required_columns(self):
         """前処理で必要なカラムが追加されることをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         
         assert 'EntryPoint' in guesser.df_trk_departed.columns
@@ -208,7 +184,7 @@ class TestAssign:
             airport_file=TEST_AIRPORT_FILE,
             target_airports=['RJTT', 'RJAA']
         )
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         guesser.assign(radius_km=10.0)
         
@@ -220,19 +196,18 @@ class TestAssign:
             airport_file=TEST_AIRPORT_FILE,
             target_airports=['RJTT', 'RJAA', 'RJCC']
         )
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
-        # 大きな半径で割り当て
-        guesser.assign(radius_km=50.0)
+        guesser.assign(radius_km=10.0)
         
-        # JAL001は東京近郊から出発
-        guess = guesser.df_guess[guesser.df_guess['Callsign'] == 'JAL001']
+        # AG01002は東京近郊から出発
+        guess = guesser.df_guess[guesser.df_guess['Callsign'] == 'AG01002']
         assert not guess.empty
         
     def test_assign_creates_guess_dataframe(self):
         """割り当て後にguess DataFrameが作成されることをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         guesser.assign(radius_km=10.0)
         
@@ -256,7 +231,7 @@ class TestGetGuessDF:
     def test_get_guess_df_returns_dataframe(self):
         """get_guess_dfがDataFrameを返すことをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         guesser.assign(radius_km=10.0)
         
@@ -266,25 +241,18 @@ class TestGetGuessDF:
     def test_get_guess_df_has_required_columns(self):
         """get_guess_dfが必要なカラムを持つことをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         guesser.assign(radius_km=10.0)
         
-        result = guesser.get_guess_df(include_date=True)
+        result = guesser.get_guess_df()
         expected_columns = [
-            'date', 'Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
+            'Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
             'ExitPoint', 'Distance_to_ExitPoint'
         ]
         for col in expected_columns:
             assert col in result.columns
 
-        result_no_date = guesser.get_guess_df(include_date=False)
-        expected_columns_no_date = [
-            'Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
-            'ExitPoint', 'Distance_to_ExitPoint'
-        ]
-        for col in expected_columns_no_date:
-            assert col in result_no_date.columns
             
     def test_get_guess_df_before_assignment(self):
         """割り当て前にget_guess_dfを呼んだ場合のテスト"""
@@ -298,7 +266,7 @@ class TestEdgeCases:
     def test_distance_calculation_accuracy(self):
         """距離計算の精度をテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         guesser.assign(radius_km=50.0)
         
@@ -316,7 +284,7 @@ class TestEdgeCases:
     def test_multiple_callsigns(self):
         """複数のコールサインが正しく処理されることをテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         guesser.assign(radius_km=50.0)
         
@@ -327,7 +295,7 @@ class TestEdgeCases:
     def test_no_matching_airports(self):
         """半径内に空港がない場合のテスト"""
         guesser = AirportGuesser(airport_file=TEST_AIRPORT_FILE)
-        guesser.load_trks_from_paths([TEST_TRK_FILE_1])
+        guesser.set_trks_df(df_test_trks)
         guesser.preprocess()
         # 非常に小さい半径で割り当て
         guesser.assign(radius_km=0.1)
