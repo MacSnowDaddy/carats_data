@@ -74,7 +74,10 @@ class TrkPlotter:
         if title is None:
             title = str(datetime.now())
 
-        index_mask = self.df_trk[key_column] == key
+        if key_column is not None and key is not None:
+            index_mask = self.df_trk[key_column] == key
+        else:
+            index_mask = [True] * len(self.df_trk)
 
         geojson = {
             "type": "FeatureCollection",
