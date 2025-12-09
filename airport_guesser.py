@@ -1,7 +1,6 @@
 """airport_guesser module — AirportGuesser クラスを提供します."""
 from __future__ import annotations
 
-import warnings
 import pandas as pd
 import numpy as np
 from typing import List, Optional
@@ -11,11 +10,9 @@ class AirportGuesser:
     トラッキングデータから出発/到着空港を推定するクラス。
     使用例:
       g = AirportGuesser(airport_file=".../Aerodrome_utf8.txt", target_airports=[...])
-      g.load_trks_from_dates(['20190816'], ['00_12','12_18'], trk_dir="~/Desktop/201908")
       g.preprocess()
       g.assign(radius_km=10.0)
       df = g.get_guess_df()
-      g.to_csv('airport_guess.csv')
     """
     def __init__(self, airport_file: str, fixes_file: str=None, target_airports: Optional[List[str]] = None):
         '''
@@ -63,41 +60,18 @@ class AirportGuesser:
         if self.is_to_guess_fixes is True:
             self.target_airports += self.df_fixes['Name'].tolist()
 
-    def set_trks_df(self, df_trks: pd.DataFrame):
-        """
-        AirportGuesserにトラッキングデータのDataFrameを設定します。
+    def set_trks_df(self, df_trk: pd.DataFrame):
+        '''Set trks DataFrame to be used for guessing.
         
-        :param df_trks: 使用するトラッキングデータのDataFrame。カラムは['date','time','Callsign','Latitude','Longitude','Altitude','Type']を含む必要があります。
-        """
-        self.df_all_trk = df_trks.copy()
-
-    def load_trks_from_paths(self, paths: List[str]):
-        warn_msg = "`deprecated_method` is deprecated and will be removed"
-        warnings.warn(warn_msg, UserWarning)
-        frames = []
-        for p in paths:
-            date = p.split('trk')[1].split('_')[0]
-            df = pd.read_csv(p)
-            df.columns = ["time","Callsign","Latitude","Longitude","Altitude","Type"]
-            df.insert(0, 'date', None)
-            df.loc[:, 'date'] = date
-            frames.append(df)
-        if frames:
-            self.df_all_trk = pd.concat([self.df_all_trk] + frames, ignore_index=True)
-
-    def load_trks_from_dates(self, dates: List[str], source_times: List[str], trk_dir: str):
-        warn_msg = "`deprecated_method` is deprecated and will be removed"
-        warnings.warn(warn_msg, UserWarning)
-        paths = []
-        for d in dates:
-            for st in source_times:
-                paths.append(f"{trk_dir}/trk{d}_{st}.csv")
-        self.load_trks_from_paths(paths)
+        param:
+        df_trk: DataFrame of trks to be used for guessing.
+        '''
+        self.df_all_trk = df_trk.copy()
 
     def preprocess(self):
         if self.df_all_trk.empty:
             return
-        self.df_all_trk = self.df_all_trk.sort_values(by=['Callsign','time'], ascending=[True, True])
+        self.df_all_trk = self.df_all_trk.sort_values(by=['Callsign','datetime'], ascending=[True, True])
         first = self.df_all_trk.groupby('Callsign', as_index=False).first()
         last = self.df_all_trk.groupby('Callsign', as_index=False).last()
         # guess airports for departed and landed
@@ -138,8 +112,8 @@ class AirportGuesser:
             # 出発
             mask_dep = self.df_trk_departed['EntryPoint'].isna()
             if mask_dep.any():
-                d_dep = np.sqrt((self.df_trk_departed.loc[mask_dep,'Latitude'] - lat)**2 +
-                                (self.df_trk_departed.loc[mask_dep,'Longitude'] - lon)**2) * 111.32
+                d_dep = round(np.sqrt((self.df_trk_departed.loc[mask_dep,'Latitude'] - lat)**2 +
+                                (self.df_trk_departed.loc[mask_dep,'Longitude'] - lon)**2) * 111.32, 2)
                 assign_mask = d_dep <= radius_km
                 idxs = self.df_trk_departed.loc[mask_dep].index[assign_mask]
                 self.df_trk_departed.loc[idxs, 'EntryPoint'] = icao
@@ -148,8 +122,8 @@ class AirportGuesser:
             # 到着
             mask_arr = self.df_trk_landed['ExitPoint'].isna()
             if mask_arr.any():
-                d_arr = np.sqrt((self.df_trk_landed.loc[mask_arr,'Latitude'] - lat)**2 +
-                                (self.df_trk_landed.loc[mask_arr,'Longitude'] - lon)**2) * 111.32
+                d_arr = round(np.sqrt((self.df_trk_landed.loc[mask_arr,'Latitude'] - lat)**2 +
+                                (self.df_trk_landed.loc[mask_arr,'Longitude'] - lon)**2) * 111.32, 2)
                 assign_mask = d_arr <= radius_km
                 idxs = self.df_trk_landed.loc[mask_arr].index[assign_mask]
                 self.df_trk_landed.loc[idxs, 'ExitPoint'] = icao
@@ -164,8 +138,8 @@ class AirportGuesser:
                 # 最初に飛行中だったもの
                 mask_first = self.df_trk_in_the_air_at_first['EntryPoint'].isna()
                 if mask_first.any():
-                    d_first = np.sqrt((self.df_trk_in_the_air_at_first.loc[mask_first,'Latitude'] - lat)**2 +
-                                    (self.df_trk_in_the_air_at_first.loc[mask_first,'Longitude'] - lon)**2) * 111.32
+                    d_first = round(np.sqrt((self.df_trk_in_the_air_at_first.loc[mask_first,'Latitude'] - lat)**2 +
+                                    (self.df_trk_in_the_air_at_first.loc[mask_first,'Longitude'] - lon)**2) * 111.32, 2)
                     assign_mask = d_first <= radius_km
                     idxs = self.df_trk_in_the_air_at_first.loc[mask_first].index[assign_mask]
                     self.df_trk_in_the_air_at_first.loc[idxs, 'EntryPoint'] = name
@@ -174,8 +148,8 @@ class AirportGuesser:
                 # 最後に飛行中だったもの
                 mask_last = self.df_trk_in_the_air_at_last['ExitPoint'].isna()
                 if mask_last.any():
-                    d_last = np.sqrt((self.df_trk_in_the_air_at_last.loc[mask_last,'Latitude'] - lat)**2 +
-                                    (self.df_trk_in_the_air_at_last.loc[mask_last,'Longitude'] - lon)**2) * 111.32
+                    d_last = round(np.sqrt((self.df_trk_in_the_air_at_last.loc[mask_last,'Latitude'] - lat)**2 +
+                                    (self.df_trk_in_the_air_at_last.loc[mask_last,'Longitude'] - lon)**2) * 111.32, 2)
                     assign_mask = d_last <= radius_km
                     idxs = self.df_trk_in_the_air_at_last.loc[mask_last].index[assign_mask]
                     self.df_trk_in_the_air_at_last.loc[idxs, 'ExitPoint'] = name
@@ -188,11 +162,11 @@ class AirportGuesser:
 
         # マージして結果を作る
         self.df_guess = pd.merge(
-            self.df_trk_departed[['date', 'Callsign','EntryPoint','Distance_to_EntryPoint']],
-            self.df_trk_landed[['date', 'Callsign','ExitPoint','Distance_to_ExitPoint']],
-            on=['date', 'Callsign'], how='outer')
+            self.df_trk_departed[['Callsign','EntryPoint','Distance_to_EntryPoint']],
+            self.df_trk_landed[['Callsign','ExitPoint','Distance_to_ExitPoint']],
+            on=['Callsign'], how='outer')
 
-    def get_guess_df(self, include_date=False) -> pd.DataFrame:
+    def get_guess_df(self) -> pd.DataFrame:
         """推定結果のDataFrameを取得します。
         Returns:
             pd.DataFrame: 推定結果のDataFrame.空の時は空のDataFrameを返します. 
@@ -202,20 +176,15 @@ class AirportGuesser:
         if self.df_guess.empty:
             return self.df_guess
 
-        if include_date is False:
-            return self.df_guess[['Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
+        return self.df_guess[['Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
                                   'ExitPoint', 'Distance_to_ExitPoint']]
-        else:
-            return self.df_guess
-
+    
     def to_csv(self, path: str, include_trks=False, include_date=False):
         '''To write csv file of this output.
         
         param:
         include_trks: If this args is True, write all trks 
         appended thire EntryPoint and ExitPoint. Default:False'''
-        warn_msg = "`deprecated_method` is deprecated and will be removed in v0.5"
-        warnings.warn(warn_msg, UserWarning)
         if self.df_guess.empty:
             return
         if include_trks is True:
@@ -236,6 +205,32 @@ class AirportGuesser:
             else:
                 self.df_guess.to_csv(path, index=False)
             self.df_guess.to_csv(path, index=False)
+    
+    def to_pickle(self, path: str, include_trks=False, include_date=False):
+        '''To write pickle file of this output.
+        
+        param:
+        include_trks: If this args is True, write all trks 
+        appended thire EntryPoint and ExitPoint. Default:False'''
+        if self.df_guess.empty:
+            return
+        if include_trks is True:
+            self.df_all_trk = pd.merge(
+                self.df_all_trk,
+                self.df_guess[['Callsign', 'EntryPoint', 'ExitPoint']],
+                how='left',
+                on='Callsign'
+                )
+            if include_date is False:
+                self.df_all_trk.drop(columns=['date']).to_pickle(path, index=False)
+            else:
+                self.df_all_trk.to_pickle(path, index=False)
+        else:
+            if include_date is False:
+                self.df_guess[['Callsign', 'EntryPoint', 'Distance_to_EntryPoint',
+                               'ExitPoint', 'Distance_to_ExitPoint']].to_pickle(path, index=False)
+            else:
+                self.df_guess.to_pickle(path, index=False)
 
 # -------------------------
 # 簡単な使用例（スクリプトとして使う場合）
