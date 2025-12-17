@@ -16,12 +16,13 @@ class TrkPlotter:
         """
         self.df_trk = df_trk.copy()
 
-    def plot_geojson_flight_points(self, key_column=None, key=None, title=None):
+    def plot_geojson_flight_points(self, key_column=None, key=None, comment_column=None, title=None):
         """Plot geojson file of the flight trk as points.
 
         param:
             key_column:あとに指定するkeyが含まれるcolumn名
             key:column名に含まれるkeyword
+            comment_column:各ポイントに追加するコメントが含まれるcolumn名
         
         column='DEP_Airport', key='RJTT'などの使い方もできる。
         # 出力形式は以下の通り
@@ -101,6 +102,8 @@ class TrkPlotter:
                             ]
                         }
                     }
+            if comment_column is not None:
+                feature["properties"]["name"] = str(row[comment_column])
             geojson["features"].append(feature)
         import json
         with open(f'{title}.geojson', 'w') as f:
